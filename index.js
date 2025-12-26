@@ -1,3 +1,5 @@
+console.log("🚀 BOT DOSYASI ÇALIŞTI");
+
 const { Client, GatewayIntentBits } = require('discord.js');
 const fs = require('fs');
 
@@ -101,3 +103,4 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
