@@ -38,46 +38,33 @@ client.once('ready', () => {
 });
 
 // 🔊 SES DURUMU
-client.on('voiceStateUpdate', async (oldState, newState) => {
-  const member = newState.member;
-  if (!member) return;
+client.on("voiceStateUpdate", (oldState, newState) => {
+  const userId = newState.id;
 
-  const userId = member.id;
-
-  // 🔇 KENDİNİ SUSTURDU
-  if (!oldState.selfMute && newState.selfMute) {
-    activeMutes.set(userId, Date.now());
-
-    try {
-      await member.setNickname(`[RAPORDA] ${member.user.username}`);
-    } catch {}
-
-    if (!raporData[userId]) {
-      raporData[userId] = {
-        username: member.user.username,
-        totalSeconds: 0
-      };
-    }
+  if (!activeMutes[userId]) {
+    activeMutes[userId] = { start: null };
   }
 
-  // 🔊 SUSTURMAYI AÇTI
-  if (oldState.selfMute && !newState.selfMute) {
-    const start = activeMutes.get(userId);
-    if (!start) return;
+  // 🔴 susturma başladı
+  if (
+    !oldState.selfMute &&
+    newState.selfMute &&
+    newState.channelId
+  ) {
+    activeMutes[userId].start = Date.now();
+    return;
+  }
 
-    const duration = Math.floor((Date.now() - start) / 1000);
-    raporData[userId].totalSeconds += duration;
-
-    saveData();
-    activeMutes.delete(userId);
-
-    try {
-      await member.setNickname(member.user.username);
-    } catch {}
-
-    console.log(
-      `${member.user.username} RAPORDA ${formatTime(duration)} kaldı`
-    );
+  // 🟢 susturma bitti
+  if (
+    oldState.selfMute &&
+    (
+      !newState.selfMute ||
+      !newState.channelId ||
+      oldState.channelId !== newState.channelId
+    )
+  ) {
+    stopMuteAndSave(userId);
   }
 });
 
@@ -103,4 +90,5 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
 
