@@ -1,84 +1,100 @@
-console.log("🚀 BOT DOSYASI ÇALIŞTI");
-
-const { Client, GatewayIntentBits } = require('discord.js');
-const fs = require('fs');
+const { Client, GatewayIntentBits, Partials } = require("discord.js");
+const fs = require("fs");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
-  ]
+  ],
+  partials: [Partials.Channel]
 });
 
-// Geçici mute başlangıçları
-const activeMutes = new Map();
+const DATA_FILE = "./rapor-data.json";
 
-// Kalıcı rapor verileri
-let raporData = {};
-if (fs.existsSync("rapor-data.json")) {
-  raporData = JSON.parse(fs.readFileSync("rapor-data.json"));
+// kayıtlı süreler
+let data = {};
+if (fs.existsSync(DATA_FILE)) {
+  data = JSON.parse(fs.readFileSync(DATA_FILE));
 }
 
+// anlık susturulanlar
+const activeMutes = {};
+
+// yardımcı
 function saveData() {
-  fs.writeFileSync("rapor-data.json", JSON.stringify(raporData, null, 2));
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-function formatTime(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  return `${h}sa ${m}dk ${s}sn`;
+function formatTime(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return `${h}s ${m}dk ${s}sn`;
 }
 
-client.once('ready', () => {
-  console.log(`✅ Bot aktif: ${client.user.tag}`);
-});
+// VOICE TAKİBİ
+client.on("voiceStateUpdate", async (oldState, newState) => {
+  const member = newState.member || oldState.member;
+  if (!member || member.user.bot) return;
 
-// 🔊 SES DURUMU
-client.on("voiceStateUpdate", (oldState, newState) => {
-  const userId = newState.id;
+  const userId = member.id;
 
-  if (!activeMutes[userId]) {
-    activeMutes[userId] = { start: null };
-  }
-
-  // 🔴 susturma başladı
+  // SUSTURMA BAŞLADI
   if (
     !oldState.selfMute &&
     newState.selfMute &&
     newState.channelId
   ) {
-    activeMutes[userId].start = Date.now();
+    activeMutes[userId] = {
+      start: Date.now(),
+      nickname: member.displayName
+    };
+
+    // RAPORDA ekle
+    if (!member.displayName.startsWith("RAPORDA |")) {
+      member.setNickname(`RAPORDA | ${member.displayName}`).catch(() => {});
+    }
     return;
   }
 
-  // 🟢 susturma bitti
-  if (
-    oldState.selfMute &&
-    (
-      !newState.selfMute ||
-      !newState.channelId ||
-      oldState.channelId !== newState.channelId
-    )
-  ) {
-    stopMuteAndSave(userId);
+  // SUSTURMA BİTTİ
+  const leftServer = oldState.channelId && !newState.channelId;
+  const micOpened = oldState.selfMute && !newState.selfMute;
+
+  if (activeMutes[userId] && (leftServer || micOpened)) {
+    const seconds = Math.floor(
+      (Date.now() - activeMutes[userId].start) / 1000
+    );
+
+    if (!data[userId]) {
+      data[userId] = {
+        username: member.user.username,
+        totalSeconds: 0
+      };
+    }
+
+    data[userId].totalSeconds += seconds;
+    saveData();
+
+    // nick eski haline dönsün
+    member.setNickname(activeMutes[userId].nickname).catch(() => {});
+
+    delete activeMutes[userId];
   }
 });
 
-// 📊 LEADERBOARD KOMUTU
-client.on('messageCreate', async (message) => {
+// KOMUT: !rapor
+client.on("messageCreate", (message) => {
   if (message.author.bot) return;
   if (message.content !== "!rapor") return;
 
-  const sorted = Object.values(raporData)
-    .sort((a, b) => b.totalSeconds - a.totalSeconds)
-    .slice(0, 10);
+  const sorted = Object.values(data)
+    .sort((a, b) => b.totalSeconds - a.totalSeconds);
 
   if (sorted.length === 0) {
-    return message.channel.send("📭 Henüz RAPORDA verisi yok.");
+    return message.channel.send("📊 Henüz RAPORDA verisi yok.");
   }
 
   let reply = "📊 **RAPORDA LEADERBOARD**\n\n";
@@ -89,6 +105,9 @@ client.on('messageCreate', async (message) => {
   message.channel.send(reply);
 });
 
+// BOT AÇILIŞ
+client.once("ready", () => {
+  console.log(`✅ Bot aktif: ${client.user.tag}`);
+});
+
 client.login(process.env.DISCORD_TOKEN);
-
-
