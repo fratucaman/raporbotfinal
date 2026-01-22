@@ -39,6 +39,17 @@ client.on("voiceStateUpdate", async (oldState, newState) => {
   const member = newState.member || oldState.member;
   if (!member || member.user.bot) return;
 
+  // KANALA MUTE HALDE GİRİŞ (exploit fix)
+if (
+  !oldState.channelId &&
+  newState.channelId &&
+  newState.selfMute &&
+  !activeTimers.has(newState.id)
+) {
+  startReport(newState.member);
+  return;
+}
+  
   const userId = member.id;
 
   // SUSTURMA BAŞLADI
@@ -117,4 +128,5 @@ client.once("ready", () => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
 
