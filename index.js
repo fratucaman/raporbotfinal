@@ -99,7 +99,13 @@ client.on("messageCreate", (message) => {
 
   let reply = "📊 **RAPORDA LEADERBOARD**\n\n";
   sorted.forEach((u, i) => {
-    reply += `**${i + 1}.** ${u.username} — ${formatTime(u.totalSeconds)}\n`;
+  let medal = "";
+  if (i === 0) medal = "🥇 ";
+  if (i === 1) medal = "🥈 ";
+  if (i === 2) medal = "🥉 ";
+
+  reply += `${medal}**${i + 1}.** ${u.username} — ${formatTime(u.totalSeconds)}\n`;
+
   });
 
   message.channel.send(reply);
@@ -111,3 +117,4 @@ client.once("ready", () => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
